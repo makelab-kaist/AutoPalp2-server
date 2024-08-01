@@ -1,8 +1,7 @@
-const crypto = require('crypto');
 const express = require('express');
 const { createServer } = require('http');
 const WebSocket = require('ws');
-const { Board, Led } = require("johnny-five");
+const { SerialPort } = require('serialport');
 
 const app = express();
 const port = 3000;
@@ -10,43 +9,44 @@ const port = 3000;
 const server = createServer(app);
 const wss = new WebSocket.Server({ server });
 
-wss.on('connection', function(ws) {
-  let board = new Board();
-  let led;
+const serialPort = new SerialPort({
+  path: '/dev/cu.usbmodem21201', // Replace with your actual serial port path
+  baudRate: 115200,
+});
 
-  board.on("ready", () => {
-    console.log("board ready");
-    
-    led = new Led(13);
-    led.blink(500);
-  });
+serialPort.on('error', function (err) {
+  console.log('Error: ', err.message);
+});
 
-  console.log("client joined.");
+serialPort.on('data', function (data) {
+  const dataString = data.toString();
+  console.log("Arduino -> Quest | '" + dataString + "' from Arduino");
 
-  // send "hello world" interval
-  const textInterval = setInterval(() => ws.send("hello world!"), 100);
-
-  // send random bytes interval
-  const binaryInterval = setInterval(() => ws.send(crypto.randomBytes(8).buffer), 110);
-
-  ws.on('message', function(data) {
-    if (typeof(data) === "string") {
-      // client sent a string
-      console.log("string received from client -> '" + data + "'");
-
-    } else {
-      console.log("binary received from client -> " + Array.from(data).join(", ") + "");
+  // Broadcast data to all connected clients
+  wss.clients.forEach(function (client) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(dataString);
     }
-  });
-
-  ws.on('close', function() {
-    console.log("client left.");
-
-    clearInterval(textInterval);
-    clearInterval(binaryInterval);
   });
 });
 
-server.listen(port, function() {
+wss.on('connection', function (ws) {
+  console.log("Client joined.");
+
+  ws.on('message', function (message) {
+      serialPort.write(message, function (err) {
+        if (err) {
+          return console.log('Error on write: ', err.message);
+        }
+        console.log("Quest -> Arduino | " + message + " to Arduino");
+      });
+  });
+
+  ws.on('close', function () {
+    console.log("Client left.");
+  });
+});
+
+server.listen(port, function () {
   console.log(`Listening on http://localhost:${port}`);
 });
