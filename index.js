@@ -10,7 +10,7 @@ const server = createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const serialPort = new SerialPort({
-  path: '/dev/cu.usbmodem21201', // Replace with your actual serial port path
+  path: '/dev/cu.usbmodem1101',
   baudRate: 115200,
 });
 
@@ -20,9 +20,8 @@ serialPort.on('error', function (err) {
 
 serialPort.on('data', function (data) {
   const dataString = data.toString();
-  console.log("Arduino -> Quest | '" + dataString + "' from Arduino");
+  console.log("Arduino -> Quest | " + dataString);
 
-  // Broadcast data to all connected clients
   wss.clients.forEach(function (client) {
     if (client.readyState === WebSocket.OPEN) {
       client.send(dataString);
@@ -38,7 +37,7 @@ wss.on('connection', function (ws) {
         if (err) {
           return console.log('Error on write: ', err.message);
         }
-        console.log("Quest -> Arduino | " + message + " to Arduino");
+        console.log("Quest -> Arduino | " + message);
       });
   });
 
