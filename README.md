@@ -1,2 +1,0 @@
-# AutoPalp-server
-# AutoPalp-server
