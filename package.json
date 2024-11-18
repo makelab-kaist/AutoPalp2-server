@@ -1,16 +1,16 @@
 {
-  "name": "nodeserver",
-  "version": "1.0.0",
-  "description": "",
+  "name": "AutoPalp2-server",
+  "version": "0.1.0",
+  "description": "Node.js Server for AutoPalp2",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
-    "node": "22.x"
+    "node": "20.x"
   },
-  "author": "",
+  "author": "makelab-kaist",
   "license": "ISC",
   "dependencies": {
     "express": "^4.17.1",
