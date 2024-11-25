@@ -57,38 +57,34 @@ async function getToken() {
   }
 }
 
-async function getPatient() {
-  const patientID = 8001011234567;
-  try {
-    const url = `${process.env.REST_API_URL}/patient/${patientID}`;
+async function getPatient(patientID) {
+  if (savedToken) {
+    try {
+      const url = `${process.env.REST_API_URL}/patient/${patientID}`;
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${savedToken}`,
-        'Accept': 'application/json'
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${savedToken}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      console.log('Patient data received:', data);
+      return data;
+    } catch (error) {
+      console.error('Error while fetching patient data:', error.message);
     }
-
-    const data = await response.json();
-    console.log('Patient data received:', data);
-  } catch (error) {
-    console.error('Error while fetching patient data:', error.message);
+  } else {
+    console.error('Token is not available!');
+    ws.send(JSON.stringify({ success: false, error: 'Token is not available' }));
   }
 }
-
-getToken().then(token => {
-  getPatient();
-  if (token) {
-    console.log('Received token:', token);
-  } else {
-    console.log('Failed to obtain token');
-  }
-});
 
 wss.on('connection', function (ws) {
   console.log("Client joined.");
@@ -96,35 +92,18 @@ wss.on('connection', function (ws) {
   ws.on('message', async function (message) {
     console.log('Received message:', message);
 
-    const patientID = message;
-
-    if (patientID) {
-      if (savedToken) {
-        try {
-          const url = `https://port-0-autopalp-server-m3qr5oi138cff77f.sel4.cloudtype.app/patient/${patientID}`;
-
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${savedToken}`,
-              'Accept': 'application/json'
-            }
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const data = await response.json();
-          console.log('Patient data received:', data);
-          
-          ws.send(JSON.stringify(data));
-        } catch (error) {
-          console.error('Error while fetching patient data:', error.message);
-        }
+    if (message === 'token') {
+      const token = await getToken();
+      if (token) {
+        ws.send(JSON.stringify({ success: true, token }));
+        console.log('Token sent to client:', token);
       } else {
-        console.error('Token is not available!');
+        ws.send(JSON.stringify({ success: false, error: 'Failed to obtain token' }));
       }
+    } else if (/^\d{13}$/.test(message)) {
+      const patientID = message;
+      const data = await getPatient(patientID);
+      ws.send(JSON.stringify(data));
     } else {
       serialPort.write(message, function (err) {
         if (err) {
