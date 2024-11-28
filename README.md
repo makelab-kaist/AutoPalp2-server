@@ -1,4 +1,4 @@
-# AutoPalp-server
+# AutoPalp2-server
 
 Node.js server for connecting Meta Quest and AutoPalp Algometer.
 
