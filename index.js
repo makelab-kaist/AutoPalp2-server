@@ -65,7 +65,10 @@ async function getToken() {
   try {
     const response = await fetch(`${process.env.REST_API_URL}/auth/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ password: process.env.PASSWORD }),
     });
 
@@ -80,56 +83,32 @@ async function getToken() {
   }
 }
 
-// API: Get Token
-async function postPalpationData(patientID) {
+// API: Post Palpation Data
+async function postPalpationData(patientID, data) {
   try {
     const response = await fetch(`${process.env.REST_API_URL}/patient/data/${patientID}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${savedToken}` },
-      body: JSON.stringify({ 
-        "Q1": {
-          "pain": 0,
-          "force": 0
-        },
-        "Q2": {
-          "pain": 0,
-          "force": 0
-        },
-        "Q3": {
-          "pain": 0,
-          "force": 0
-        },
-        "Q4": {
-          "pain": 0,
-          "force": 0
-        }
-      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${savedToken}`,
+      },
+      body: JSON.stringify(data),
     });
 
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-    console.log("Succeed to post palpation data");
+    console.log('Palpation data posted successfully.');
   } catch (error) {
-    console.error('Error while adding palpation data:', error.message);
-    return null;
+    console.error('Error posting palpation data:', error.message);
   }
-}
-
-// API: Get Patient by ID
-async function getPatient(patientID) {
-  return await fetchWithToken(`/patient/${patientID}`);
-}
-
-// API: Get All Patients
-async function getAllPatients() {
-  return await fetchWithToken('/patient');
 }
 
 // Handle WebSocket Messages
 function parseMessage(ws, message) {
   console.log('Received message:', message);
 
-  const messageType = /^\d{13}$/.test(message) ? 'patientId' : message;
+  const messageType = /^\d{13}$/.test(message) ? 'patientID' : message;
 
   switch (messageType) {
     case 'token':
@@ -138,11 +117,11 @@ function parseMessage(ws, message) {
     case 'patients':
       handleAllPatientsRequest(ws);
       break;
-    case 'patientId':
+    case 'patientID':
       handlePatientRequest(ws, message);
       break;
     case 'palpationData':
-      postPalpationData(9212311234567);
+      postPalpationData(9212311234567, generateDummyData());
       break;
     default:
       handleArduinoMessage(message);
@@ -158,12 +137,12 @@ async function handleTokenRequest(ws) {
 }
 
 async function handlePatientRequest(ws, patientID) {
-  const data = await getPatient(patientID);
+  const data = await fetchWithToken(`/patient/${patientID}`);
   ws.send(JSON.stringify(data));
 }
 
 async function handleAllPatientsRequest(ws) {
-  const data = await getAllPatients();
+  const data = await fetchWithToken('/patient');
   ws.send(JSON.stringify(data));
 }
 
@@ -175,6 +154,17 @@ function handleArduinoMessage(message) {
       console.log("Quest -> Arduino |", message);
     }
   });
+}
+
+// Utility: Generate dummy data for palpation
+function generateDummyData() {
+  return {
+    Q1: { pain: 1, force: 2 },
+    Q2: { pain: 3, force: 4 },
+    Q3: { pain: 5, force: 6 },
+    Q4: { pain: 7, force: 8 },
+    Q5: { pain: 9, force: 0 },
+  };
 }
 
 // WebSocket Server
