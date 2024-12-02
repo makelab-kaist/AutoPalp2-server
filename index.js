@@ -11,6 +11,8 @@ const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 3000;
 
 let savedToken = null;
+let currRegions = 0;
+const palpationData = generatePalpationData();
 
 // Initialize SerialPort
 const serialPort = new SerialPort({
@@ -24,9 +26,61 @@ serialPort.on('data', (data) => {
   const dataString = data.toString();
   console.log("Arduino -> Quest |", dataString);
 
-  // Broadcast data to all WebSocket clients
   broadcastToClients(dataString);
+
+  try {
+    const parsedData = JSON.parse(dataString);
+
+    if (parsedData.ack === "ready") {
+      console.log("Arduino is ready."); 
+    } else if (parsedData.ack === "reset") {
+      console.log("Reset Arduino."); 
+    } else if (parsedData.data) {
+      const number = parseInt(parsedData.data, 10);
+      if (!isNaN(number)) {
+        updateForceValue(number);
+        console.log("Updated force values:", palpationData);
+
+        // Broadcast the updated data to WebSocket clients
+        // broadcastToClients(JSON.stringify(palpationData));
+      } else {
+        console.warn("Invalid data: Not a number.");
+      }
+    } else {
+      console.warn("Invalid JSON format. 'ack' or 'data' key missing.");
+    }
+  } catch (error) {
+    console.error("Error parsing JSON data:", error.message);
+  }
 });
+
+
+// Utility: Update force value in Q1~Q5 in a circular manner and check completion
+function updateForceValue(number) {
+  const keys = Object.keys(palpationData);
+  palpationData[keys[currRegions]].force = number;
+
+  currRegions = (currRegions + 1) % keys.length;
+
+  if (isAllForcesFilled()) {
+    console.log("All forces filled. Posting palpation data...");
+    postPalpationData(8001011234567, palpationData);
+    resetForceValues();
+  }
+}
+
+// Utility: Reset all force values to null after posting
+function resetForceValues() {
+  Object.keys(palpationData).forEach(key => {
+    palpationData[key].force = null;
+  });
+  currRegions = 0; // 인덱스 초기화
+}
+
+// Utility: Check if all force values are filled
+function isAllForcesFilled() {
+  return Object.values(palpationData).every(entry => entry.force !== null);
+}
 
 // Utility: Broadcast message to all WebSocket clients
 function broadcastToClients(message) {
@@ -120,9 +174,9 @@ function parseMessage(ws, message) {
     case 'patientID':
       handlePatientRequest(ws, message);
       break;
-    case 'palpationData':
-      postPalpationData(9212311234567, generateDummyData());
-      break;
+    // case 'palpationData':
+    //   postPalpationData(9212311234567, generatePalpationData());
+    //   break;
     default:
       handleArduinoMessage(message);
   }
@@ -157,13 +211,13 @@ function handleArduinoMessage(message) {
 }
 
 // Utility: Generate dummy data for palpation
-function generateDummyData() {
+function generatePalpationData() {
   return {
-    Q1: { pain: 1, force: 2 },
-    Q2: { pain: 3, force: 4 },
-    Q3: { pain: 5, force: 6 },
-    Q4: { pain: 7, force: 8 },
-    Q5: { pain: 9, force: 0 },
+    Q1: { pain: 1, force: null },
+    Q2: { pain: 2, force: null },
+    Q3: { pain: 3, force: null },
+    Q4: { pain: 4, force: null },
+    Q5: { pain: 5, force: null },
   };
 }
 
