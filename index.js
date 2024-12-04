@@ -34,17 +34,14 @@ serialPort.on('data', (data) => {
     if (parsedData.ack === "ready") {
       console.log("Arduino is ready."); 
     } else if (parsedData.ack === "reset") {
-      console.log("Reset Arduino."); 
+      console.log("Reset Arduino.");
     } else if (parsedData.data) {
       const number = parseInt(parsedData.data, 10);
       if (!isNaN(number)) {
         updateForceValue(number);
         console.log("Updated force values:", palpationData);
-
-        // Broadcast the updated data to WebSocket clients
-        // broadcastToClients(JSON.stringify(palpationData));
       } else {
-        console.warn("Invalid data: Not a number.");
+        console.warn("Invalid force data: Not a number.");
       }
     } else {
       console.warn("Invalid JSON format. 'ack' or 'data' key missing.");
@@ -59,6 +56,12 @@ serialPort.on('data', (data) => {
 function updateForceValue(number) {
   const keys = Object.keys(palpationData);
   palpationData[keys[currRegions]].force = number;
+}
+
+// Utility: Update force value in Q1~Q5 in a circular manner and check completion
+function updatePainValue(number) {
+  const keys = Object.keys(palpationData);
+  palpationData[keys[currRegions]].pain = number;
 
   currRegions = (currRegions + 1) % keys.length;
 
@@ -79,7 +82,7 @@ function resetForceValues() {
 
 // Utility: Check if all force values are filled
 function isAllForcesFilled() {
-  return Object.values(palpationData).every(entry => entry.force !== null);
+  return Object.values(palpationData).every(entry => entry.pain !== null);
 }
 
 // Utility: Broadcast message to all WebSocket clients
@@ -162,6 +165,17 @@ async function postPalpationData(patientID, data) {
 function parseMessage(ws, message) {
   console.log('Received message:', message);
 
+  // Check if the message is JSON and has a "pain" key
+  try {
+    const parsedMessage = JSON.parse(message);
+    if (parsedMessage.pain !== undefined) {
+      updatePainValue(parsedMessage.pain);
+      return; // Stop further processing
+    }
+  } catch (e) {
+    // If parsing fails, continue to handle as a regular message
+  }
+
   const messageType = /^\d{13}$/.test(message) ? 'patientID' : message;
 
   switch (messageType) {
@@ -174,9 +188,6 @@ function parseMessage(ws, message) {
     case 'patientID':
       handlePatientRequest(ws, message);
       break;
-    // case 'palpationData':
-    //   postPalpationData(9212311234567, generatePalpationData());
-    //   break;
     default:
       handleArduinoMessage(message);
   }
@@ -213,11 +224,11 @@ function handleArduinoMessage(message) {
 // Utility: Generate dummy data for palpation
 function generatePalpationData() {
   return {
-    Q1: { pain: 1, force: null },
-    Q2: { pain: 2, force: null },
-    Q3: { pain: 3, force: null },
-    Q4: { pain: 4, force: null },
-    Q5: { pain: 5, force: null },
+    Q1: { pain: null, force: null },
+    Q2: { pain: null, force: null },
+    Q3: { pain: null, force: null },
+    Q4: { pain: null, force: null },
+    Q5: { pain: null, force: null },
   };
 }
 
