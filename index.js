@@ -23,8 +23,7 @@ const serialPort = new SerialPort({
 serialPort.on('error', (err) => console.error('SerialPort Error:', err.message));
 
 serialPort.on('data', (data) => {
-  const dataString = data.toString();
-  console.log("Arduino -> Quest |", dataString);
+  const dataString = data.toString().trim();
 
   broadcastToClients(dataString);
 
@@ -149,8 +148,6 @@ async function postPalpationData(patientID, data) {
 
 // Handle WebSocket Messages
 function parseMessage(ws, message) {
-  console.log('Received message:', message);
-
   // Check if the message is JSON and has a "pain" key
   try {
     const parsedMessage = JSON.parse(message);
@@ -201,8 +198,6 @@ function handleArduinoMessage(message) {
   serialPort.write(message, (err) => {
     if (err) {
       console.error('Error on write:', err.message);
-    } else {
-      console.log("Quest -> Arduino |", message);
     }
   });
 }
