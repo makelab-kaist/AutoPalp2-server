@@ -10,11 +10,12 @@ const server = createServer(app);
 const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 3000;
 
-let savedToken = null;
-let palpationData = {};
-let currRegionIndex = 1;
+// State variables
+let savedToken = null; // Stores authentication token
+let palpationData = {}; // Stores palpation data by region
+let currRegionIndex = 1; // Tracks the current region index for palpation
 
-// Initialize SerialPort
+// SerialPort Configuration
 const serialPort = new SerialPort({
   path: process.env.SERIAL_PORT_PATH || '/dev/cu.usbmodem1101',
   baudRate: 115200,
@@ -24,7 +25,6 @@ serialPort.on('error', (err) => console.error('SerialPort Error:', err.message))
 
 serialPort.on('data', (data) => {
   const dataString = data.toString().trim();
-
   broadcastToClients(dataString);
 
   try {
@@ -33,19 +33,9 @@ serialPort.on('data', (data) => {
     if (parsedData.ack === "ready") {
       console.log("Arduino is ready."); 
     } else if (parsedData.ack === "reset") {
-      if (Object.keys(palpationData).length !== 0) {
-        console.log("Final palpation data: ", palpationData)
-        postPalpationData(8001011234567, palpationData);
-        palpationData = {};
-      }
-      console.log("Reset Arduino.");
+      handleArduinoReset();
     } else if (parsedData.data) {
-      const number = parseInt(parsedData.data, 10);
-      if (!isNaN(number)) {
-        updateForceValue(number);
-      } else {
-        console.warn("Invalid force data: Not a number.");
-      }
+      processForceData(parsedData.data);
     } else {
       console.warn("Invalid JSON format. 'ack' or 'data' key missing.");
     }
@@ -54,23 +44,56 @@ serialPort.on('data', (data) => {
   }
 });
 
-// Utility: Update force value in the current region (Q1, Q2, etc.)
+/**
+ * Handles a reset signal from the Arduino, posting collected palpation data if available.
+ */
+function handleArduinoReset() {
+  if (Object.keys(palpationData).length !== 0) {
+    console.log("Final palpation data:", palpationData);
+    postPalpationData(8001011234567, palpationData); // Replace hardcoded ID as needed
+    palpationData = {};
+  }
+  console.log("Reset Arduino.");
+}
+
+/**
+ * Processes force data received from Arduino.
+ * @param {string|number} data - Force data to process.
+ */
+function processForceData(data) {
+  const forceValue = parseInt(data, 10);
+  if (!isNaN(forceValue)) {
+    updateForceValue(forceValue);
+  } else {
+    console.warn("Invalid force data: Not a number.");
+  }
+}
+
+/**
+ * Updates force value for the current region.
+ * @param {number} number - Force value.
+ */
 function updateForceValue(number) {
   const key = `R${currRegionIndex}`;
   palpationData[key] = { pain: null, force: null };
   palpationData[key].force = number;
 }
 
-// Utility: Update pain value in the current region (Q1, Q2, etc.)
+/**
+ * Updates pain value for the current region and increments the region index.
+ * @param {number} number - Pain value.
+ */
 function updatePainValue(number) {
   const key = `R${currRegionIndex++}`;
   palpationData[key].pain = number;
 
   console.log(`Updated ${key}:`, palpationData[key]);
-  // currRegionIndex++;
 }
 
-// Utility: Broadcast message to all WebSocket clients
+/**
+ * Broadcasts a message to all connected WebSocket clients.
+ * @param {string} message - Message to broadcast.
+ */
 function broadcastToClients(message) {
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
@@ -79,7 +102,12 @@ function broadcastToClients(message) {
   });
 }
 
-// Utility: Fetch from API with token
+/**
+ * Performs an authenticated fetch to the REST API.
+ * @param {string} endpoint - API endpoint.
+ * @param {object} options - Fetch options.
+ * @returns {object} API response or error.
+ */
 async function fetchWithToken(endpoint, options = {}) {
   if (!savedToken) {
     console.error('Token is not available!');
@@ -102,7 +130,10 @@ async function fetchWithToken(endpoint, options = {}) {
   }
 }
 
-// API: Get Token
+/**
+ * Fetches a new authentication token from the REST API.
+ * @returns {string|null} The fetched token or null on failure.
+ */
 async function getToken() {
   try {
     const response = await fetch(`${process.env.REST_API_URL}/auth/token`, {
@@ -125,7 +156,11 @@ async function getToken() {
   }
 }
 
-// API: Post Palpation Data
+/**
+ * Posts palpation data to the REST API.
+ * @param {number} patientID - The patient's ID.
+ * @param {object} data - Palpation data to post.
+ */
 async function postPalpationData(patientID, data) {
   try {
     const response = await fetch(`${process.env.REST_API_URL}/patient/data/${patientID}`, {
@@ -146,17 +181,20 @@ async function postPalpationData(patientID, data) {
   }
 }
 
-// Handle WebSocket Messages
+/**
+ * Parses incoming WebSocket messages.
+ * @param {WebSocket} ws - The WebSocket client.
+ * @param {string} message - The received message.
+ */
 function parseMessage(ws, message) {
-  // Check if the message is JSON and has a "pain" key
   try {
     const parsedMessage = JSON.parse(message);
     if (parsedMessage.pain !== undefined) {
       updatePainValue(parsedMessage.pain);
-      return; // Stop further processing
+      return;
     }
   } catch (e) {
-    // If parsing fails, continue to handle as a regular message
+    // Ignore JSON parsing errors and proceed with raw message handling
   }
 
   const messageType = /^\d{13}$/.test(message) ? 'patientID' : message;
@@ -176,6 +214,9 @@ function parseMessage(ws, message) {
   }
 }
 
+/**
+ * WebSocket Handlers
+ */
 async function handleTokenRequest(ws) {
   const token = await getToken();
   const response = token
