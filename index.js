@@ -1,12 +1,12 @@
-const express = require('express');
+const Fastify = require('fastify');
 const { createServer } = require('http');
 const WebSocket = require('ws');
 const { SerialPort } = require('serialport');
 const fetch = require('node-fetch');
 require("dotenv").config();
 
-const app = express();
-const server = createServer(app);
+const fastify = Fastify({ logger: true });
+const server = createServer(fastify.server);
 const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 3000;
 
@@ -43,6 +43,8 @@ serialPort.on('data', (data) => {
     console.error("Error parsing JSON data:", error.message);
   }
 });
+
+// Helper functions
 
 /**
  * Handles a reset signal from the Arduino, posting collected palpation data if available.
@@ -249,6 +251,11 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (message) => parseMessage(ws, message));
   ws.on('close', () => console.log("Client left."));
+});
+
+// Define a simple route to confirm server functionality
+fastify.get('/', async (request, reply) => {
+  return { message: 'Fastify server is running!' };
 });
 
 // Start Server
