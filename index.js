@@ -21,9 +21,16 @@ const serialPort = new SerialPort({
   baudRate: 115200,
 });
 
-serialPort.on('error', (err) => console.error('SerialPort Error:', err.message));
+serialPort.on('error', handleSerialPortError);
+serialPort.on('data', handleSerialPortData);
 
-serialPort.on('data', (data) => {
+// Serial Port Error Handler
+function handleSerialPortError(err) {
+  console.error('SerialPort Error:', err.message);
+}
+
+// Serial Port Data Handler
+function handleSerialPortData(data) {
   const dataString = data.toString().trim();
   broadcastToClients(dataString);
 
@@ -31,7 +38,7 @@ serialPort.on('data', (data) => {
     const parsedData = JSON.parse(dataString);
 
     if (parsedData.ack === "ready") {
-      console.log("Arduino is ready."); 
+      console.log("Arduino is ready.");
     } else if (parsedData.ack === "reset") {
       handleArduinoReset();
     } else if (parsedData.data) {
@@ -42,9 +49,7 @@ serialPort.on('data', (data) => {
   } catch (error) {
     console.error("Error parsing JSON data:", error.message);
   }
-});
-
-// Helper functions
+}
 
 /**
  * Handles a reset signal from the Arduino, posting collected palpation data if available.
