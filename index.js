@@ -11,7 +11,7 @@ const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 3000;
 
 // State variables
-let savedToken = null; // Stores authentication token
+let savedToken =  process.env.TOKEN; // Stores authentication token
 let palpationData = {}; // Stores palpation data by region
 let currRegionIndex = 1; // Tracks the current region index for palpation
 
@@ -120,6 +120,8 @@ async function fetchWithToken(endpoint, options = {}) {
     console.error('Token is not available!');
     return { success: false, error: 'Token is not available' };
   }
+
+  console.log(endpoint);
 
   const headers = {
     'Authorization': `Bearer ${savedToken}`,
@@ -243,6 +245,7 @@ async function handleAllPatientsRequest(ws) {
 }
 
 function handleArduinoMessage(message) {
+  console.log(message);
   serialPort.write(message, (err) => {
     if (err) {
       console.error('Error on write:', err.message);
